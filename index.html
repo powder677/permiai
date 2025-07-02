@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>ProBookingQR - Book Your Appointment</title>
+   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+   <style>
+      * {
+         margin: 0;
+         padding: 0;
+         box-sizing: border-box;
+      }
+
+      body {
+         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+         min-height: 100vh;
+         padding: 20px;
+      }
+
+      .container {
+         max-width: 500px;
+         margin: 0 auto;
+         background: white;
+         border-radius: 20px;
+         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+         overflow: hidden;
+      }
+
+      .header {
+         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+         color: white;
+         padding: 30px;
+         text-align: center;
+      }
+
+      .header h1 {
+         font-size: 28px;
+         margin-bottom: 10px;
+      }
+
+      .header p {
+         opacity: 0.9;
+         font-size: 16px;
+      }
+
+      .form-container {
+         padding: 30px;
+      }
+
+      .form-group {
+         margin-bottom: 20px;
+      }
+
+      label {
+         display: block;
+         margin-bottom: 8px;
+         font-weight: 600;
+         color: #333;
+      }
+
+      input,
+      select,
+      textarea {
+         width: 100%;
+         padding: 12px;
+         border: 2px solid #e1e1e1;
+         border-radius: 8px;
+         font-size: 16px;
+         transition: border-color 0.3s;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+         outline: none;
+         border-color: #667eea;
+      }
+
+      .service-grid {
+         display: grid;
+         grid-template-columns: 1fr 1fr;
+         gap: 15px;
+         margin-top: 10px;
+      }
+
+      .service-option {
+         padding: 15px;
+         border: 2px solid #e1e1e1;
+         border-radius: 8px;
+         cursor: pointer;
+         transition: all 0.3s;
+         text-align: center;
+      }
+
+      .service-option:hover {
+         border-color: #667eea;
+         background: #f8f9ff;
+      }
+
+      .service-option.selected {
+         border-color: #667eea;
+         background: #667eea;
+         color: white;
+      }
+
+      .service-name {
+         font-weight: 600;
+         margin-bottom: 5px;
+      }
+
+      .service-duration {
+         font-size: 12px;
+         opacity: 0.7;
+      }
+
+      .service-price {
+         font-size: 18px;
+         font-weight: bold;
+         margin-top: 5px;
+         color: #667eea;
+      }
+
+      .service-option.selected .service-price {
+         color: white;
+      }
+
+      .book-button {
+         width: 100%;
+         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+         color: white;
+         border: none;
+         padding: 15px;
+         font-size: 18px;
+         font-weight: 600;
+         border-radius: 8px;
+         cursor: pointer;
+         transition: transform 0.2s;
+         margin-top: 20px;
+      }
+
+      .book-button:hover {
+         transform: translateY(-2px);
+      }
+
+      .book-button:disabled {
+         opacity: 0.5;
+         cursor: not-allowed;
+         transform: none;
+      }
+
+      .loading {
+         text-align: center;
+         padding: 40px;
+         color: #666;
+      }
+
+      .error {
+         background: #fee;
+         color: #c33;
+         padding: 15px;
+         border-radius: 8px;
+         margin-bottom: 20px;
+         border: 1px solid #fcc;
+      }
+
+      .success {
+         background: #efe;
+         color: #363;
+         padding: 15px;
+         border-radius: 8px;
+         margin-bottom: 20px;
+         border: 1px solid #cfc;
+      }
+
+      .stylist-info {
+         background: #f8f9ff;
+         padding: 20px;
+         border-radius: 8px;
+         margin-bottom: 20px;
+         text-align: center;
+      }
+
+      .stylist-name {
+         font-size: 20px;
+         font-weight: 600;
+         color: #333;
+         margin-bottom: 5px;
+      }
+
+      .stylist-specialty {
+         color: #666;
+         font-size: 14px;
+      }
+
+      @media (max-width: 600px) {
+         .service-grid {
+            grid-template-columns: 1fr;
+         }
+      }
+   </style>
+</head>
+
+<body>
+   <div class="container">
+      <div class="header">
+         <h1>✂️ Book Your Appointment</h1>
+         <p>Professional hair care services</p>
+      </div>
+
+      <div id="app">
+         <div class="loading">
+            <p>Loading booking system...</p>
+         </div>
+      </div>
+   </div>
+
+   <script>
+      // ⚠️ REPLACE THESE WITH YOUR ACTUAL SUPABASE CREDENTIALS
+      const SUPABASE_URL = 'https://your-project.supabase.co';
+      const SUPABASE_ANON_KEY = 'your-anon-key-here';
+
+      // Initialize Supabase
+      const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      console.log('Supabase client initialized.');
+
+      // App state
+      let currentStylist = null;
+      let services = [];
+      let selectedService = null;
+
+      // Get stylist from URL parameter
+      function getStylistFromURL() {
+         const urlParams = new URLSearchParams(window.location.search);
+         return urlParams.get('s') || 'sarah-johnson-luxe';
+      }
+
+      // Load stylist and services
+      async function loadStylistData() {
+         try {
+            const stylistSlug = getStylistFromURL();
+            console.log('Loading stylist:', stylistSlug);
+
+            // Get stylist with error handling
+            const {
+               data: stylistData,
+               error: stylistError
+            } = await supabase
+               .from('stylists')
+               .select('*')
+               .eq('slug', stylistSlug)
+               .maybeSingle(); // Use maybeSingle instead of single
+
+            if (stylistError) {
+               console.error('Stylist query error:', stylistError);
+               throw new Error(`Failed to load stylist: ${stylistError.message}`);
+            }
+
+            if (!stylistData) {
+               console.warn('No stylist found for slug:', stylistSlug);
+               // Create a default stylist if none exists
+               currentStylist = {
+                  id: 1,
+                  name: 'Sarah Johnson',
+                  specialty: 'Luxury Hair Styling',
+                  slug: stylistSlug
+               };
+            } else {
+               currentStylist = stylistData;
+            }
+
+            // Get services with error handling
+            const {
+               data: servicesData,
+               error: servicesError
+            } = await supabase
+               .from('services')
+               .select('*')
+               .eq('stylist_id', currentStylist.id);
+
+            if (servicesError) {
+               console.error('Services query error:', servicesError);
+               // Use default services if query fails
+               services = getDefaultServices();
+            } else if (!servicesData || servicesData.length === 0) {
+               console.warn('No services found, using defaults');
+               services = getDefaultServices();
+            } else {
+               services = servicesData;
+            }
+
+            renderApp();
+         } catch (error) {
+            console.error('Error loading data:', error);
+            renderError('Failed to load booking system. Please refresh and try again.');
+         }
+      }
+
+      // Default services fallback
+      function getDefaultServices() {
+         return [{
+               id: 1,
+               name: 'Haircut & Style',
+               duration: 60,
+               price: 75,
+               stylist_id: 1
+            },
+            {
+               id: 2,
+               name: 'Color Treatment',
+               duration: 120,
+               price: 150,
+               stylist_id: 1
+            },
+            {
+               id: 3,
+               name: 'Highlights',
+               duration: 180,
+               price: 200,
+               stylist_id: 1
+            },
+            {
+               id: 4,
+               name: 'Blowout',
+               duration: 45,
+               price: 50,
+               stylist_id: 1
+            }
+         ];
+      }
+
+      // Render the app
+      function renderApp() {
+         const app = document.getElementById('app');
+         app.innerHTML = `
+                <div class="form-container">
+                    <div class="stylist-info">
+                        <div class="stylist-name">${currentStylist.name}</div>
+                        <div class="stylist-specialty">${currentStylist.specialty || 'Professional Hair Stylist'}</div>
+                    </div>
+
+                    <form id="bookingForm">
+                        <div class="form-group">
+                            <label for="customerName">Your Name</label>
+                            <input type="text" id="customerName" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="customerEmail">Email</label>
+                            <input type="email" id="customerEmail" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="customerPhone">Phone Number</label>
+                            <input type="tel" id="customerPhone" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Select Service</label>
+                            <div class="service-grid">
+                                ${services.map(service => `
+                                    <div class="service-option" data-service-id="${service.id}">
+                                        <div class="service-name">${service.name}</div>
+                                        <div class="service-duration">${service.duration} min</div>
+                                        <div class="service-price">$${service.price}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="appointmentDate">Preferred Date</label>
+                            <input type="date" id="appointmentDate" required min="${new Date().toISOString().split('T')[0]}">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="appointmentTime">Preferred Time</label>
+                            <select id="appointmentTime" required>
+                                <option value="">Select time</option>
+                                <option value="09:00">9:00 AM</option>
+                                <option value="10:00">10:00 AM</option>
+                                <option value="11:00">11:00 AM</option>
+                                <option value="12:00">12:00 PM</option>
+                                <option value="13:00">1:00 PM</option>
+                                <option value="14:00">2:00 PM</option>
+                                <option value="15:00">3:00 PM</option>
+                                <option value="16:00">4:00 PM</option>
+                                <option value="17:00">5:00 PM</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="notes">Special Requests (Optional)</label>
+                            <textarea id="notes" rows="3" placeholder="Any special requests or notes...">
